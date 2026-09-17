@@ -23,6 +23,8 @@ Antes de tocar código, leé esto en orden:
 3. [`docs/testing-plan.md`](./docs/testing-plan.md) — qué test (unitario o de integración) va
    a cubrir cada caso de prueba pedido por el enunciado.
 4. [`docs/diagrams/`](./docs/diagrams/) — diagramas de arquitectura y de flujo del pipeline.
+5. [`docs/team-plan.md`](./docs/team-plan.md) — división del trabajo en 5 paquetes para el
+   equipo, con archivos, dependencias y tests a cargo de cada persona.
 
 ## Resumen de la arquitectura
 
