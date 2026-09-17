@@ -4,14 +4,16 @@ Backend en **Node.js + TypeScript + Express** que procesa reservas de vuelo a tr
 pipeline de filtros (patrón arquitectónico **Pipes & Filters**), según el enunciado en
 [`CONSIGNA.md`](./CONSIGNA.md).
 
-> **Estado actual: implementación completa.** Los 5 paquetes de trabajo de
-> [`docs/team-plan.md`](./docs/team-plan.md) están mergeados, más el paso de "Integración
-> final" que cablea todo junto. Los 4 endpoints requeridos están expuestos y **112 tests**
-> (80 unitarios + 32 de integración) pasan en verde.
+> **Implementación completa.** Los 4 endpoints requeridos están expuestos, los 8 filtros de
+> negocio (7 del enunciado, con el filtro 3 dividido en dos pasos de código — ver más abajo)
+> están implementados y **112 tests pasan en verde** (80 unitarios + 32 de integración). El
+> proceso de trabajo en equipo que llevó hasta acá está documentado en
+> [`docs/team-plan.md`](./docs/team-plan.md).
 
 ## Documentación
 
-Antes de tocar código, leé esto en orden:
+Documentación de referencia con el diseño completo detrás de esta implementación — qué se
+decidió, por qué, y qué caso de prueba cubre cada cosa:
 
 1. [`docs/architecture.md`](./docs/architecture.md) — cómo se aplica Pipes & Filters acá: el
    contrato de `Filter`, el orquestador del pipeline, el ciclo de vida de una reserva a través
@@ -53,19 +55,6 @@ Garantías del ejecutor ([`src/pipeline/Pipeline.ts`](./src/pipeline/Pipeline.ts
   individual nunca tumba el procesamiento del lote.
 - Si la API de tipo de cambio falla, el procesamiento **continúa** con un warning y la tasa de
   fallback — nunca se interrumpe el pipeline.
-
-## Progreso de implementación
-
-Basado en la división de [`docs/team-plan.md`](./docs/team-plan.md).
-
-| Paquete | Contenido | Estado |
-|---|---|:---:|
-| Dev 1 — Núcleo | Tipos, schemas zod, contrato `Filter`, orquestador `Pipeline`, `PipelineConfigStore`, `app.ts`/`server.ts` | ✅ |
-| Dev 2 — Validación + mocks | `PassengerValidationFilter`, `FlightValidationFilter`, `mockPassengers.ts`, `mockFlights.ts` | ✅ |
-| Dev 3 — Tipo de cambio | `ExchangeRateProvider` (fetch + retry + timeout + fallback), `ExchangeRateCache` (TTL + deduplicación), `countryCurrencyMap.ts`, `defaultExchangeRates.ts`, filtros `ExchangeRateEnrichmentFilter` (3a) y `CurrencyConversionFilter` (3b) | ✅ |
-| Dev 4 — Filtros de precio | `BasePriceCalculationFilter`, `LoyaltyDiscountFilter`, `PassengerTypeAdjustmentFilter`, `TaxAndFeesFilter` | ✅ |
-| Dev 5 — Capa API + Postman | Rutas, controllers, middlewares, `ReservationStore`, colección Postman, tests de integración | ✅ |
-| Integración final | `filters/index.ts` con los 8 filtros reales en orden, rutas cableadas en `app.ts`, tests de punta a punta | ✅ |
 
 ## Estructura de carpetas
 
@@ -177,8 +166,8 @@ global; para cambiarla de forma persistente está `PUT /pipeline/config`.
 [`postman/`](./postman) tiene la colección y el environment (entregable 3 de la consigna). Se
 importan desde *Import → File*:
 
-- `M7A-grupo6-ejercicio1.postman_collection.json` — 16 requests con ejemplos de response
-  guardados: flujo feliz, casos de descuento, batch mixto con rechazos, los `400`/`404` y la
+- `M7A-grupo6-ejercicio1.postman_collection.json` — 16 requests (10 con ejemplo de response
+  guardado): flujo feliz, casos de descuento, batch mixto con rechazos, los `400`/`404` y la
   administración del pipeline.
 - `M7A-grupo6-ejercicio1.postman_environment.json` — define `{{baseUrl}}`.
 
