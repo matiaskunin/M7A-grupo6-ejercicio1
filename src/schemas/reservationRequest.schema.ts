@@ -14,6 +14,8 @@ export const reservationRequestSchema = z.object({
   flightCode: z.string().min(1),
   seatClass: seatClassSchema,
   declaredPassengerType: z.enum(['child', 'adult', 'senior']).optional(),
+  origin: z.string().min(1).optional(),
+  destination: z.string().min(1).optional(),
 });
 
 export const processReservationsBodySchema = z.object({

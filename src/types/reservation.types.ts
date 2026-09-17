@@ -17,6 +17,10 @@ export interface ReservationRequest {
   /** Valor informativo mandado por el cliente — nunca se usa para calcular el precio, ver
    * design-decisions.md §4. El tipo real siempre se deriva de `passenger.birthDate`. */
   declaredPassengerType?: 'child' | 'adult' | 'senior';
+  /** Opcional: origen esperado por el cliente, para validar ruta contra el vuelo. */
+  origin?: string;
+  /** Opcional: destino esperado por el cliente, para validar ruta contra el vuelo. */
+  destination?: string;
 }
 
 export interface ReservationIssue {
