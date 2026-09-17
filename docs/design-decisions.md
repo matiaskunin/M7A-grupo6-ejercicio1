@@ -134,6 +134,20 @@ tipo derivado, no el declarado.
   comparte una única promesa en vuelo en vez de disparar dos llamadas HTTP redundantes. No lo
   pide el enunciado explícitamente, pero se desprende del requerimiento de cache/eficiencia y
   evita duplicar consumo de la cuota gratuita de la API externa.
+- **Qué precio se convierte a moneda local.** El enunciado dice "convertir precio base USD a
+  moneda de destino". Acá se convierte el **total final** (`pricing.totalUSD` →
+  `pricing.totalConverted`), no el precio base del vuelo. El motivo es que el precio base es un
+  valor intermedio del cálculo —antes de clase de asiento, descuentos, impuestos y tasas— y
+  convertirlo daría un número que el pasajero nunca paga; lo que tiene sentido mostrar en
+  moneda local es lo que efectivamente se abona. La tasa usada, su origen (`live` / `cache` /
+  `fallback`) y el momento en que se obtuvo quedan en `metadata.exchangeRate`, y el importe
+  original en USD se conserva junto al convertido en `pricing`, de modo que se cumple el
+  "mantener precio original y convertido" del enunciado. Es también la razón por la que el
+  filtro 3b corre al final de la cadena (ver [`architecture.md`](./architecture.md) §4).
+- **Invalidación manual de la cache de tasas.** `CONSIGNA.md` la pide en "Caching de Tasas"
+  pero no dice cómo exponerla. Se resolvió con un endpoint `DELETE /pipeline/cache`, por
+  coherencia con el resto de la administración del pipeline, que ya vive bajo `/pipeline`.
+  Devuelve cuántas entradas se eliminaron y es idempotente.
 
 ## Trazabilidad: enunciado → dónde se resuelve
 

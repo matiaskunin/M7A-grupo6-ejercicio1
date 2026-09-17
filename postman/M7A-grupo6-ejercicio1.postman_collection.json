@@ -1,0 +1,458 @@
+{
+  "info": {
+    "name": "M7A grupo6 - Ejercicio 1 (Pipes & Filters)",
+    "description": "Sistema de reservas de vuelos con pipeline de 8 filtros.\n\nUsar con el environment \"M7A grupo6 ejercicio1 - local\" (define {{baseUrl}}).\n\nOrden sugerido: correr primero \"1. Reserva valida\" para poblar el store en memoria, y despues los requests de /reservations/:id/status.\n\nLos ejemplos de response guardados fueron capturados contra el servidor real.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "baseUrl", "value": "http://localhost:3000", "type": "string" }
+  ],
+  "item": [
+    {
+      "name": "Health",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": { "raw": "{{baseUrl}}/health", "host": ["{{baseUrl}}"], "path": ["health"] },
+        "description": "Chequeo de vida. No es uno de los 4 endpoints de la consigna."
+      },
+      "response": [
+        {
+          "name": "200 OK",
+          "originalRequest": {
+            "method": "GET",
+            "url": { "raw": "{{baseUrl}}/health", "host": ["{{baseUrl}}"], "path": ["health"] }
+          },
+          "status": "OK",
+          "code": 200,
+          "header": [{ "key": "Content-Type", "value": "application/json" }],
+          "body": "{\n    \"status\": \"ok\"\n}"
+        }
+      ]
+    },
+    {
+      "name": "POST /reservations/process",
+      "item": [
+        {
+          "name": "1. Reserva valida (Gold, business, destino BR)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 OK', () => pm.response.to.have.status(200));",
+                  "const body = pm.response.json();",
+                  "pm.test('completada', () => pm.expect(body.results[0].status).to.eql('completed'));",
+                  "pm.test('corrieron los 8 filtros', () => pm.expect(body.results[0].metadata.filtersApplied).to.have.lengthOf(8));",
+                  "pm.collectionVariables.set('reservationId', body.results[0].id);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"reservations\": [\n    {\n      \"reservationId\": \"RES-001\",\n      \"passengerId\": \"PASS-ADULT-GOLD\",\n      \"flightCode\": \"FL-BR-003\",\n      \"seatClass\": \"business\"\n    }\n  ]\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/reservations/process",
+              "host": ["{{baseUrl}}"],
+              "path": ["reservations", "process"]
+            },
+            "description": "Pasajero Gold, clase business, vuelo EZE -> GIG (Brasil).\n\nBase $120 x 2.5 = $300 -> 15% de lealtad -> $255 -> +12% impuestos, +$25 aeropuerto, +8% combustible sobre el base = $334.60 USD, convertido a BRL por el filtro 3b."
+          },
+          "response": [
+            {
+              "name": "200 OK",
+              "originalRequest": {
+                "method": "POST",
+                "header": [{ "key": "Content-Type", "value": "application/json" }],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"reservations\": [\n    {\n      \"reservationId\": \"RES-001\",\n      \"passengerId\": \"PASS-ADULT-GOLD\",\n      \"flightCode\": \"FL-BR-003\",\n      \"seatClass\": \"business\"\n    }\n  ]\n}"
+                },
+                "url": { "raw": "{{baseUrl}}/reservations/process", "host": ["{{baseUrl}}"], "path": ["reservations", "process"] }
+              },
+              "status": "OK",
+              "code": 200,
+              "header": [{ "key": "Content-Type", "value": "application/json" }],
+              "body": "{\n    \"results\": [\n        {\n            \"id\": \"RES-001\",\n            \"status\": \"completed\",\n            \"passengerId\": \"PASS-ADULT-GOLD\",\n            \"flightCode\": \"FL-BR-003\",\n            \"pricing\": {\n                \"seatClass\": \"business\",\n                \"basePrice\": 300,\n                \"currentPrice\": 255,\n                \"subtotal\": 255,\n                \"tax\": 30.6,\n                \"airportFee\": 25,\n                \"fuelSurcharge\": 24,\n                \"totalUSD\": 334.6,\n                \"currency\": \"BRL\",\n                \"totalConverted\": 1723.19\n            },\n            \"errors\": [],\n            \"warnings\": [],\n            \"metadata\": {\n                \"filtersApplied\": [\n                    \"passengerValidation\",\n                    \"flightValidation\",\n                    \"exchangeRateEnrichment\",\n                    \"basePriceCalculation\",\n                    \"loyaltyDiscount\",\n                    \"passengerTypeAdjustment\",\n                    \"taxAndFees\",\n                    \"currencyConversion\"\n                ],\n                \"passengerTypeApplied\": \"adult\",\n                \"loyaltyTier\": \"gold\",\n                \"exchangeRate\": {\n                    \"rate\": 5.15,\n                    \"base\": \"USD\",\n                    \"target\": \"BRL\",\n                    \"fetchedAt\": \"2026-09-17T14:50:35.902Z\",\n                    \"source\": \"live\"\n                }\n            },\n            \"processingTimeMs\": 744\n        }\n    ],\n    \"summary\": {\n        \"total\": 1,\n        \"completed\": 1,\n        \"rejected\": 0,\n        \"errored\": 0\n    },\n    \"totalProcessingTimeMs\": 745\n}"
+            }
+          ]
+        },
+        {
+          "name": "2. Nino en primera clase (descuentos combinados)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"reservations\": [\n    {\n      \"reservationId\": \"RES-CHILD\",\n      \"passengerId\": \"PASS-CHILD-GOLD\",\n      \"flightCode\": \"FL-EU-004\",\n      \"seatClass\": \"first\"\n    }\n  ]\n}"
+            },
+            "url": { "raw": "{{baseUrl}}/reservations/process", "host": ["{{baseUrl}}"], "path": ["reservations", "process"] },
+            "description": "Child + Gold en primera clase, destino zona euro. Los descuentos se aplican de forma SECUENCIAL (design-decisions.md §1), no se suman."
+          },
+          "response": []
+        },
+        {
+          "name": "3. Senior con conversion a ARS",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"reservations\": [\n    {\n      \"reservationId\": \"RES-SENIOR\",\n      \"passengerId\": \"PASS-SENIOR-SILVER\",\n      \"flightCode\": \"FL-AR-002\",\n      \"seatClass\": \"economy\"\n    }\n  ]\n}"
+            },
+            "url": { "raw": "{{baseUrl}}/reservations/process", "host": ["{{baseUrl}}"], "path": ["reservations", "process"] },
+            "description": "Senior + Silver, vuelo MIA -> EZE. Destino AR: el total final se convierte a ARS."
+          },
+          "response": []
+        },
+        {
+          "name": "4. Batch mixto (validas + rechazadas)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 aunque haya rechazos', () => pm.response.to.have.status(200));",
+                  "const body = pm.response.json();",
+                  "pm.test('summary discrimina por estado', () => {",
+                  "  pm.expect(body.summary.total).to.eql(3);",
+                  "  pm.expect(body.summary.completed).to.eql(1);",
+                  "  pm.expect(body.summary.rejected).to.eql(2);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"reservations\": [\n    {\n      \"reservationId\": \"OK-1\",\n      \"passengerId\": \"PASS-ADULT-NONE\",\n      \"flightCode\": \"FL-US-001\",\n      \"seatClass\": \"economy\"\n    },\n    {\n      \"reservationId\": \"REJ-1\",\n      \"passengerId\": \"PASS-INACTIVE\",\n      \"flightCode\": \"FL-US-001\",\n      \"seatClass\": \"economy\"\n    },\n    {\n      \"reservationId\": \"REJ-2\",\n      \"passengerId\": \"PASS-ADULT-NONE\",\n      \"flightCode\": \"FL-NO-SEATS\",\n      \"seatClass\": \"economy\"\n    }\n  ]\n}"
+            },
+            "url": { "raw": "{{baseUrl}}/reservations/process", "host": ["{{baseUrl}}"], "path": ["reservations", "process"] },
+            "description": "Una reserva rechazada no interrumpe a las demas: el HTTP sigue siendo 200 y el rechazo se reporta por reserva."
+          },
+          "response": [
+            {
+              "name": "200 OK (1 completada, 2 rechazadas)",
+              "originalRequest": {
+                "method": "POST",
+                "header": [{ "key": "Content-Type", "value": "application/json" }],
+                "url": { "raw": "{{baseUrl}}/reservations/process", "host": ["{{baseUrl}}"], "path": ["reservations", "process"] }
+              },
+              "status": "OK",
+              "code": 200,
+              "header": [{ "key": "Content-Type", "value": "application/json" }],
+              "body": "{\n    \"summary\": {\n        \"total\": 3,\n        \"completed\": 1,\n        \"rejected\": 2,\n        \"errored\": 0\n    },\n    \"results\": [\n        { \"id\": \"OK-1\", \"status\": \"completed\", \"errors\": [] },\n        {\n            \"id\": \"REJ-1\",\n            \"status\": \"rejected\",\n            \"errors\": [\n                {\n                    \"filter\": \"passengerValidation\",\n                    \"code\": \"PASSENGER_INACTIVE\",\n                    \"message\": \"El pasajero no esta activo\"\n                }\n            ]\n        },\n        {\n            \"id\": \"REJ-2\",\n            \"status\": \"rejected\",\n            \"errors\": [\n                {\n                    \"filter\": \"flightValidation\",\n                    \"code\": \"FLIGHT_NO_AVAILABILITY\",\n                    \"message\": \"El vuelo no tiene asientos disponibles\"\n                }\n            ]\n        }\n    ]\n}"
+            }
+          ]
+        },
+        {
+          "name": "5. Override de config solo para esta corrida",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"reservations\": [\n    {\n      \"reservationId\": \"RES-OVERRIDE\",\n      \"passengerId\": \"PASS-ADULT-GOLD\",\n      \"flightCode\": \"FL-BR-003\",\n      \"seatClass\": \"business\"\n    }\n  ],\n  \"config\": {\n    \"filters\": {\n      \"currencyConversion\": { \"enabled\": false },\n      \"taxAndFees\": { \"params\": { \"airportFee\": 50 } }\n    }\n  }\n}"
+            },
+            "url": { "raw": "{{baseUrl}}/reservations/process", "host": ["{{baseUrl}}"], "path": ["reservations", "process"] },
+            "description": "El `config` opcional aplica SOLO a esta corrida: no toca el singleton global. Verificarlo con GET /pipeline/config despues de ejecutar este request.\n\nCon currencyConversion apagado, el total queda en USD (sin `totalConverted`)."
+          },
+          "response": []
+        },
+        {
+          "name": "6. Array vacio (200, no error)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"reservations\": []\n}" },
+            "url": { "raw": "{{baseUrl}}/reservations/process", "host": ["{{baseUrl}}"], "path": ["reservations", "process"] },
+            "description": "El enunciado no dice que un array vacio sea un error: es una entrada valida que produce un resultado vacio."
+          },
+          "response": [
+            {
+              "name": "200 OK",
+              "originalRequest": {
+                "method": "POST",
+                "header": [{ "key": "Content-Type", "value": "application/json" }],
+                "url": { "raw": "{{baseUrl}}/reservations/process", "host": ["{{baseUrl}}"], "path": ["reservations", "process"] }
+              },
+              "status": "OK",
+              "code": 200,
+              "header": [{ "key": "Content-Type", "value": "application/json" }],
+              "body": "{\n    \"results\": [],\n    \"summary\": {\n        \"total\": 0,\n        \"completed\": 0,\n        \"rejected\": 0,\n        \"errored\": 0\n    },\n    \"totalProcessingTimeMs\": 0\n}"
+            }
+          ]
+        },
+        {
+          "name": "7. Body malformado (400)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('400 Bad Request', () => pm.response.to.have.status(400));",
+                  "pm.test('indica el campo faltante', () => pm.expect(pm.response.json().issues[0].path).to.include('passengerId'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"reservations\": [\n    {\n      \"flightCode\": \"FL-US-001\",\n      \"seatClass\": \"economy\"\n    }\n  ]\n}"
+            },
+            "url": { "raw": "{{baseUrl}}/reservations/process", "host": ["{{baseUrl}}"], "path": ["reservations", "process"] },
+            "description": "Falta `passengerId`. El 400 lo devuelve el middleware zod ANTES de entrar al pipeline."
+          },
+          "response": [
+            {
+              "name": "400 Bad Request",
+              "originalRequest": {
+                "method": "POST",
+                "header": [{ "key": "Content-Type", "value": "application/json" }],
+                "url": { "raw": "{{baseUrl}}/reservations/process", "host": ["{{baseUrl}}"], "path": ["reservations", "process"] }
+              },
+              "status": "Bad Request",
+              "code": 400,
+              "header": [{ "key": "Content-Type", "value": "application/json" }],
+              "body": "{\n    \"error\": \"VALIDATION_ERROR\",\n    \"message\": \"El body de la request no cumple el contrato esperado.\",\n    \"issues\": [\n        {\n            \"path\": \"reservations.0.passengerId\",\n            \"message\": \"Required\"\n        }\n    ]\n}"
+            }
+          ]
+        },
+        {
+          "name": "8. seatClass invalida (400)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"reservations\": [\n    {\n      \"passengerId\": \"PASS-ADULT-NONE\",\n      \"flightCode\": \"FL-US-001\",\n      \"seatClass\": \"premium\"\n    }\n  ]\n}"
+            },
+            "url": { "raw": "{{baseUrl}}/reservations/process", "host": ["{{baseUrl}}"], "path": ["reservations", "process"] },
+            "description": "`premium` no esta en el enum economy | business | first."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "GET /reservations/:id/status",
+      "item": [
+        {
+          "name": "Estado de una reserva procesada",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/reservations/{{reservationId}}/status",
+              "host": ["{{baseUrl}}"],
+              "path": ["reservations", "{{reservationId}}", "status"]
+            },
+            "description": "Requiere haber corrido antes un POST /reservations/process con ese id. El store es en memoria: se vacia al reiniciar el servidor."
+          },
+          "response": [
+            {
+              "name": "200 OK",
+              "originalRequest": {
+                "method": "GET",
+                "url": { "raw": "{{baseUrl}}/reservations/RES-001/status", "host": ["{{baseUrl}}"], "path": ["reservations", "RES-001", "status"] }
+              },
+              "status": "OK",
+              "code": 200,
+              "header": [{ "key": "Content-Type", "value": "application/json" }],
+              "body": "{\n    \"id\": \"RES-001\",\n    \"status\": \"completed\",\n    \"passengerId\": \"PASS-ADULT-GOLD\",\n    \"flightCode\": \"FL-BR-003\",\n    \"pricing\": {\n        \"seatClass\": \"business\",\n        \"basePrice\": 300,\n        \"subtotal\": 255,\n        \"tax\": 30.6,\n        \"airportFee\": 25,\n        \"fuelSurcharge\": 24,\n        \"totalUSD\": 334.6,\n        \"currency\": \"BRL\",\n        \"totalConverted\": 1723.19\n    },\n    \"errors\": [],\n    \"warnings\": [],\n    \"metadata\": {\n        \"filtersApplied\": [\n            \"passengerValidation\",\n            \"flightValidation\",\n            \"exchangeRateEnrichment\",\n            \"basePriceCalculation\",\n            \"loyaltyDiscount\",\n            \"passengerTypeAdjustment\",\n            \"taxAndFees\",\n            \"currencyConversion\"\n        ],\n        \"passengerTypeApplied\": \"adult\",\n        \"loyaltyTier\": \"gold\"\n    },\n    \"processingTimeMs\": 744\n}"
+            }
+          ]
+        },
+        {
+          "name": "Id inexistente (404)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": ["pm.test('404 Not Found', () => pm.response.to.have.status(404));"]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/reservations/NO-EXISTE/status",
+              "host": ["{{baseUrl}}"],
+              "path": ["reservations", "NO-EXISTE", "status"]
+            }
+          },
+          "response": [
+            {
+              "name": "404 Not Found",
+              "originalRequest": {
+                "method": "GET",
+                "url": { "raw": "{{baseUrl}}/reservations/NO-EXISTE/status", "host": ["{{baseUrl}}"], "path": ["reservations", "NO-EXISTE", "status"] }
+              },
+              "status": "Not Found",
+              "code": 404,
+              "header": [{ "key": "Content-Type", "value": "application/json" }],
+              "body": "{\n    \"error\": \"RESERVATION_NOT_FOUND\",\n    \"message\": \"No hay ninguna reserva procesada con id \\\"NO-EXISTE\\\". Procesala primero con POST /reservations/process.\"\n}"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Pipeline config",
+      "item": [
+        {
+          "name": "GET /pipeline/config",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": { "raw": "{{baseUrl}}/pipeline/config", "host": ["{{baseUrl}}"], "path": ["pipeline", "config"] },
+            "description": "Devuelve el PipelineConfig completo: los 8 filtros con su `enabled` y sus `params`, mas la tabla de tasas de fallback."
+          },
+          "response": [
+            {
+              "name": "200 OK (recortado)",
+              "originalRequest": {
+                "method": "GET",
+                "url": { "raw": "{{baseUrl}}/pipeline/config", "host": ["{{baseUrl}}"], "path": ["pipeline", "config"] }
+              },
+              "status": "OK",
+              "code": 200,
+              "header": [{ "key": "Content-Type", "value": "application/json" }],
+              "body": "{\n    \"filters\": {\n        \"passengerValidation\": {\n            \"enabled\": true,\n            \"params\": { \"thresholds\": { \"childMaxAge\": 12, \"seniorMinAge\": 65 } }\n        },\n        \"flightValidation\": { \"enabled\": true, \"params\": {} },\n        \"exchangeRateEnrichment\": {\n            \"enabled\": true,\n            \"params\": {\n                \"timeoutMs\": 5000,\n                \"maxRetries\": 3,\n                \"cacheTtlMs\": 3600000,\n                \"baseCurrency\": \"USD\"\n            }\n        },\n        \"basePriceCalculation\": {\n            \"enabled\": true,\n            \"params\": { \"multipliers\": { \"economy\": 1, \"business\": 2.5, \"first\": 4 } }\n        },\n        \"loyaltyDiscount\": {\n            \"enabled\": true,\n            \"params\": { \"rates\": { \"bronze\": 0.05, \"silver\": 0.1, \"gold\": 0.15 } }\n        },\n        \"passengerTypeAdjustment\": {\n            \"enabled\": true,\n            \"params\": { \"rates\": { \"child\": 0.25, \"senior\": 0.15, \"adult\": 0 } }\n        },\n        \"taxAndFees\": {\n            \"enabled\": true,\n            \"params\": { \"taxRate\": 0.12, \"airportFee\": 25, \"fuelSurchargeRate\": 0.08 }\n        },\n        \"currencyConversion\": { \"enabled\": true, \"params\": {} }\n    },\n    \"exchangeRateFallback\": {\n        \"USD\": 1,\n        \"ARS\": 1000,\n        \"BRL\": 5.4,\n        \"EUR\": 0.92\n    }\n}"
+            }
+          ]
+        },
+        {
+          "name": "PUT - deshabilitar un filtro",
+          "request": {
+            "method": "PUT",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"filters\": {\n    \"loyaltyDiscount\": { \"enabled\": false }\n  }\n}"
+            },
+            "url": { "raw": "{{baseUrl}}/pipeline/config", "host": ["{{baseUrl}}"], "path": ["pipeline", "config"] },
+            "description": "Merge parcial: solo se pisa lo enviado. Despues de esto, procesar una reserva de un pasajero Gold y ver que `filtersApplied` ya no incluye `loyaltyDiscount` y el total sube."
+          },
+          "response": []
+        },
+        {
+          "name": "PUT - cambiar parametros de precio",
+          "request": {
+            "method": "PUT",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"filters\": {\n    \"taxAndFees\": {\n      \"params\": {\n        \"taxRate\": 0.21,\n        \"airportFee\": 40\n      }\n    },\n    \"loyaltyDiscount\": {\n      \"params\": { \"rates\": { \"gold\": 0.2 } }\n    }\n  }\n}"
+            },
+            "url": { "raw": "{{baseUrl}}/pipeline/config", "host": ["{{baseUrl}}"], "path": ["pipeline", "config"] },
+            "description": "Los valores no enviados (por ejemplo `fuelSurchargeRate`, o `rates.bronze`) quedan intactos."
+          },
+          "response": []
+        },
+        {
+          "name": "PUT - valor fuera de rango (400)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('400 Bad Request', () => pm.response.to.have.status(400));",
+                  "pm.test('dice que el descuento debe ser <= 1', () => pm.expect(pm.response.json().issues[0].message).to.include('less than or equal to 1'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PUT",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"filters\": {\n    \"loyaltyDiscount\": {\n      \"params\": { \"rates\": { \"gold\": 1.5 } }\n    }\n  }\n}"
+            },
+            "url": { "raw": "{{baseUrl}}/pipeline/config", "host": ["{{baseUrl}}"], "path": ["pipeline", "config"] },
+            "description": "Un descuento del 150% no tiene sentido: los porcentajes estan acotados a [0,1] por el schema zod."
+          },
+          "response": [
+            {
+              "name": "400 Bad Request",
+              "originalRequest": {
+                "method": "PUT",
+                "header": [{ "key": "Content-Type", "value": "application/json" }],
+                "url": { "raw": "{{baseUrl}}/pipeline/config", "host": ["{{baseUrl}}"], "path": ["pipeline", "config"] }
+              },
+              "status": "Bad Request",
+              "code": 400,
+              "header": [{ "key": "Content-Type", "value": "application/json" }],
+              "body": "{\n    \"error\": \"VALIDATION_ERROR\",\n    \"message\": \"El body de la request no cumple el contrato esperado.\",\n    \"issues\": [\n        {\n            \"path\": \"filters.loyaltyDiscount.params.rates.gold\",\n            \"message\": \"Number must be less than or equal to 1\"\n        }\n    ]\n}"
+            }
+          ]
+        },
+        {
+          "name": "PUT - monto negativo (400)",
+          "request": {
+            "method": "PUT",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"filters\": {\n    \"taxAndFees\": {\n      \"params\": { \"airportFee\": -5 }\n    }\n  }\n}"
+            },
+            "url": { "raw": "{{baseUrl}}/pipeline/config", "host": ["{{baseUrl}}"], "path": ["pipeline", "config"] }
+          },
+          "response": []
+        },
+        {
+          "name": "DELETE - invalidar cache de tasas",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 OK', () => pm.response.to.have.status(200));",
+                  "pm.test('informa cuantas entradas elimino', () => pm.expect(pm.response.json()).to.have.property('entriesRemoved'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": { "raw": "{{baseUrl}}/pipeline/cache", "host": ["{{baseUrl}}"], "path": ["pipeline", "cache"] },
+            "description": "Invalidacion manual de la cache de tasas de cambio (CONSIGNA.md, \"Caching de Tasas\").\n\nLa cache tiene un TTL de 1 hora; esto permite vaciarla sin reiniciar el proceso. Es idempotente.\n\nPara verlo en accion: procesar una reserva con destino BR (la tasa queda cacheada), invalidar, y volver a procesar — el campo metadata.exchangeRate.source vuelve a ser \"live\" en vez de \"cache\"."
+          },
+          "response": [
+            {
+              "name": "200 OK",
+              "originalRequest": {
+                "method": "DELETE",
+                "url": { "raw": "{{baseUrl}}/pipeline/cache", "host": ["{{baseUrl}}"], "path": ["pipeline", "cache"] }
+              },
+              "status": "OK",
+              "code": 200,
+              "header": [{ "key": "Content-Type", "value": "application/json" }],
+              "body": "{\n    \"message\": \"Cache de tasas de cambio invalidada.\",\n    \"entriesRemoved\": 2\n}"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
