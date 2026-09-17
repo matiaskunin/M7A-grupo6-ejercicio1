@@ -2,17 +2,24 @@
  * Construcción de la app Express, sin levantar el server (para poder testear con supertest
  * sin bindear un puerto real) — docs/architecture.md §10.
  *
- * Las dependencias de negocio (pipeline, config store, reservation store) entran por parámetro
- * con un default razonable. Eso permite que cada test de integración arme su propia app con su
- * propio store y su propio pipeline —incluso uno de filtros dobles— sin compartir estado
- * mutable entre casos, y que el paso de integración final solo tenga que cambiar qué lista de
- * filtros se inyecta (ver src/pipeline/buildPipeline.ts).
+ * Las dependencias de negocio (pipeline, config store, reservation store, proveedor de tasas)
+ * entran por parámetro con un default razonable. Eso permite que cada test de integración arme
+ * su propia app con sus propios stores —sin compartir estado mutable entre casos— y que la
+ * cadena de filtros se defina en un solo lugar (`src/filters/index.ts`).
+ *
+ * El proveedor de tasas se crea acá y se pasa tanto al pipeline como al controller de
+ * /pipeline: los dos tienen que ver LA MISMA cache, o `DELETE /pipeline/cache` vaciaría una
+ * cache distinta de la que usa el filtro 3a.
  */
 
 import express, { type Express } from 'express';
 import { buildDefaultPipeline } from './pipeline/buildPipeline';
 import { pipelineConfigStore, type PipelineConfigStore } from './pipeline/PipelineConfigStore';
 import { reservationStore, type ReservationStore } from './services/ReservationStore';
+import {
+  defaultExchangeRateProvider,
+  type ExchangeRateProvider,
+} from './services/ExchangeRateProvider';
 import type { Pipeline } from './pipeline/Pipeline';
 import { createReservationsRouter } from './routes/reservations.routes';
 import { createPipelineRouter } from './routes/pipeline.routes';
@@ -22,10 +29,12 @@ export interface AppDependencies {
   pipeline?: Pipeline;
   configStore?: PipelineConfigStore;
   reservationStore?: ReservationStore;
+  exchangeRateProvider?: ExchangeRateProvider;
 }
 
 export function createApp(deps: AppDependencies = {}): Express {
-  const pipeline = deps.pipeline ?? buildDefaultPipeline();
+  const exchangeRateProvider = deps.exchangeRateProvider ?? defaultExchangeRateProvider;
+  const pipeline = deps.pipeline ?? buildDefaultPipeline(exchangeRateProvider);
   const configStore = deps.configStore ?? pipelineConfigStore;
   const store = deps.reservationStore ?? reservationStore;
 
@@ -40,7 +49,7 @@ export function createApp(deps: AppDependencies = {}): Express {
   });
 
   app.use('/reservations', createReservationsRouter({ pipeline, configStore, reservationStore: store }));
-  app.use('/pipeline', createPipelineRouter({ configStore }));
+  app.use('/pipeline', createPipelineRouter({ configStore, exchangeRateProvider }));
 
   // 404 de ruta inexistente y catch-all de errores: siempre al final, después de las rutas.
   app.use(notFoundHandler);

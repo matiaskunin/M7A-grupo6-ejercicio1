@@ -6,7 +6,7 @@
  */
 
 import request from 'supertest';
-import { buildTestApp, validReservation } from '../fixtures/requests';
+import { buildTestApp, reservationToBrazil, validReservation } from '../fixtures/requests';
 
 describe('GET /pipeline/config', () => {
   it('devuelve la configuración completa vigente', async () => {
@@ -122,5 +122,61 @@ describe('PUT /pipeline/config', () => {
 
     expect(response.body.filters.taxAndFees.params.airportFee).toBe(25);
     expect(response.body.filters.loyaltyDiscount.params.rates.gold).toBe(0.15);
+  });
+});
+
+/**
+ * CONSIGNA.md, "Caching de Tasas": la cache tiene TTL de 1 hora pero debe poder invalidarse a
+ * mano. Sin este endpoint el `clear()` de ExchangeRateCache era inalcanzable desde afuera.
+ */
+describe('DELETE /pipeline/cache', () => {
+  it('vacía la cache de tasas y reporta cuántas entradas eliminó', async () => {
+    const { app, exchangeRateProvider } = buildTestApp();
+    const cache = exchangeRateProvider.getCache();
+
+    cache.set('USD', 'BRL', 5.4, 60_000);
+    cache.set('USD', 'ARS', 1000, 60_000);
+    expect(cache.size()).toBe(2);
+
+    const response = await request(app).delete('/pipeline/cache');
+
+    expect(response.status).toBe(200);
+    expect(response.body.entriesRemoved).toBe(2);
+    expect(cache.size()).toBe(0);
+  });
+
+  it('es idempotente: invalidar una cache ya vacía no falla', async () => {
+    const { app } = buildTestApp();
+
+    const primera = await request(app).delete('/pipeline/cache');
+    const segunda = await request(app).delete('/pipeline/cache');
+
+    expect(primera.status).toBe(200);
+    expect(segunda.status).toBe(200);
+    expect(segunda.body.entriesRemoved).toBe(0);
+  });
+
+  it('vacía la misma cache que usa el pipeline, no una instancia aparte', async () => {
+    const { app, exchangeRateProvider } = buildTestApp();
+
+    // Una reserva procesada deja la cache del provider compartido al alcance del endpoint.
+    await request(app).post('/reservations/process').send({ reservations: [reservationToBrazil()] });
+
+    exchangeRateProvider.getCache().set('USD', 'BRL', 5.4, 60_000);
+    await request(app).delete('/pipeline/cache');
+
+    expect(exchangeRateProvider.getCache().size()).toBe(0);
+  });
+
+  it('el pipeline sigue funcionando después de invalidar la cache', async () => {
+    const { app } = buildTestApp();
+
+    await request(app).delete('/pipeline/cache');
+    const response = await request(app)
+      .post('/reservations/process')
+      .send({ reservations: [validReservation()] });
+
+    expect(response.status).toBe(200);
+    expect(response.body.results[0].status).toBe('completed');
   });
 });

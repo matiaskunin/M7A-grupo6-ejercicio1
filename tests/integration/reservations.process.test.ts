@@ -19,6 +19,8 @@ import {
   validReservation,
   STUB_RATE,
 } from '../fixtures/requests';
+import { HttpExchangeRateProvider } from '../../src/services/ExchangeRateProvider';
+import { ExchangeRateCache } from '../../src/services/ExchangeRateCache';
 
 describe('POST /reservations/process', () => {
   it('procesa una reserva válida y devuelve el PipelineResult completo', async () => {
@@ -177,5 +179,82 @@ describe('POST /reservations/process', () => {
 
     expect(response.status).toBe(400);
     expect(response.body.error).toBe('VALIDATION_ERROR');
+  });
+});
+
+/**
+ * CONSIGNA.md, "Casos de Error" punto 3: pipeline interrumpido por falla de red.
+ *
+ * Estos casos usan el HttpExchangeRateProvider REAL con `fetch` mockeado, no el stub: la idea
+ * es ejercitar la cadena completa —reintentos, timeout, fallback, warning— tal como se
+ * comportaría con la red caída, y confirmar la aclaración del enunciado: "si falla, el
+ * procesamiento continúa con warnings", nunca se interrumpe el pipeline.
+ */
+describe('POST /reservations/process con la red caída', () => {
+  function buildAppConRedCaida(rechazo: Error) {
+    const fetchMock = jest.spyOn(global, 'fetch' as never).mockRejectedValue(rechazo as never);
+    const provider = new HttpExchangeRateProvider({
+      cache: new ExchangeRateCache(),
+      maxRetries: 3,
+      timeoutMs: 50,
+    });
+    return { ...buildTestApp({ exchangeRateProvider: provider }), fetchMock };
+  }
+
+  it('la reserva se completa igual, con warning y precio en USD', async () => {
+    const { app } = buildAppConRedCaida(new Error('getaddrinfo ENOTFOUND'));
+
+    const response = await request(app)
+      .post('/reservations/process')
+      .send({ reservations: [reservationToBrazil()] });
+
+    expect(response.status).toBe(200);
+
+    const [result] = response.body.results;
+    expect(result.status).toBe('completed');
+    expect(result.pricing.totalUSD).toBeGreaterThan(0);
+    expect(result.warnings.map((w: { code: string }) => w.code)).toContain(
+      'EXCHANGE_RATE_FALLBACK_APPLIED',
+    );
+    expect(result.metadata.exchangeRate.source).toBe('fallback');
+  });
+
+  it('reintenta antes de rendirse y recién ahí cae al fallback', async () => {
+    const { app, fetchMock } = buildAppConRedCaida(new Error('ECONNRESET'));
+
+    await request(app)
+      .post('/reservations/process')
+      .send({ reservations: [reservationToBrazil()] });
+
+    expect(fetchMock).toHaveBeenCalledTimes(3);
+  });
+
+  it('un timeout de la API tampoco interrumpe el pipeline', async () => {
+    const abortError = new Error('The operation was aborted');
+    abortError.name = 'AbortError';
+    const { app } = buildAppConRedCaida(abortError);
+
+    const response = await request(app)
+      .post('/reservations/process')
+      .send({ reservations: [reservationToBrazil()] });
+
+    expect(response.body.results[0].status).toBe('completed');
+    expect(response.body.summary.errored).toBe(0);
+  });
+
+  it('con la red caída, el resto del batch se procesa igual', async () => {
+    const { app } = buildAppConRedCaida(new Error('network unreachable'));
+
+    const response = await request(app)
+      .post('/reservations/process')
+      .send({
+        reservations: [
+          reservationToBrazil({ reservationId: 'NET-1' }),
+          validReservation({ reservationId: 'NET-2' }),
+          reservationUnknownPassenger(),
+        ],
+      });
+
+    expect(response.body.summary).toMatchObject({ total: 3, completed: 2, rejected: 1, errored: 0 });
   });
 });

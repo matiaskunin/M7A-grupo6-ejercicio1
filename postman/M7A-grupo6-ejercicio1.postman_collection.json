@@ -417,6 +417,40 @@
             "url": { "raw": "{{baseUrl}}/pipeline/config", "host": ["{{baseUrl}}"], "path": ["pipeline", "config"] }
           },
           "response": []
+        },
+        {
+          "name": "DELETE - invalidar cache de tasas",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 OK', () => pm.response.to.have.status(200));",
+                  "pm.test('informa cuantas entradas elimino', () => pm.expect(pm.response.json()).to.have.property('entriesRemoved'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": { "raw": "{{baseUrl}}/pipeline/cache", "host": ["{{baseUrl}}"], "path": ["pipeline", "cache"] },
+            "description": "Invalidacion manual de la cache de tasas de cambio (CONSIGNA.md, \"Caching de Tasas\").\n\nLa cache tiene un TTL de 1 hora; esto permite vaciarla sin reiniciar el proceso. Es idempotente.\n\nPara verlo en accion: procesar una reserva con destino BR (la tasa queda cacheada), invalidar, y volver a procesar — el campo metadata.exchangeRate.source vuelve a ser \"live\" en vez de \"cache\"."
+          },
+          "response": [
+            {
+              "name": "200 OK",
+              "originalRequest": {
+                "method": "DELETE",
+                "url": { "raw": "{{baseUrl}}/pipeline/cache", "host": ["{{baseUrl}}"], "path": ["pipeline", "cache"] }
+              },
+              "status": "OK",
+              "code": 200,
+              "header": [{ "key": "Content-Type", "value": "application/json" }],
+              "body": "{\n    \"message\": \"Cache de tasas de cambio invalidada.\",\n    \"entriesRemoved\": 2\n}"
+            }
+          ]
         }
       ]
     }

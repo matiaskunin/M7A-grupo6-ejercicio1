@@ -14,6 +14,7 @@ export function createPipelineRouter(deps: PipelineControllerDeps): Router {
 
   router.get('/config', controller.getConfig);
   router.put('/config', controller.updateConfig);
+  router.delete('/cache', controller.clearExchangeRateCache);
 
   return router;
 }

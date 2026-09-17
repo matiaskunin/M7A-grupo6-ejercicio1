@@ -23,14 +23,7 @@ import type {
   RateResult,
 } from '../../src/services/ExchangeRateProvider';
 import { ExchangeRateCache } from '../../src/services/ExchangeRateCache';
-import { PassengerValidationFilter } from '../../src/filters/PassengerValidationFilter';
-import { FlightValidationFilter } from '../../src/filters/FlightValidationFilter';
-import { ExchangeRateEnrichmentFilter } from '../../src/filters/ExchangeRateEnrichmentFilter';
-import { basePriceCalculationFilter } from '../../src/filters/BasePriceCalculationFilter';
-import { loyaltyDiscountFilter } from '../../src/filters/LoyaltyDiscountFilter';
-import { passengerTypeAdjustmentFilter } from '../../src/filters/PassengerTypeAdjustmentFilter';
-import { taxAndFeesFilter } from '../../src/filters/TaxAndFeesFilter';
-import { CurrencyConversionFilter } from '../../src/filters/CurrencyConversionFilter';
+import { createOrderedFilters } from '../../src/filters';
 
 /** Tasa fija y conocida, para poder afirmar sobre `totalConverted` sin ambigüedad. */
 export const STUB_RATE = 1000;
@@ -52,39 +45,37 @@ export class StubExchangeRateProvider implements ExchangeRateProvider {
   }
 }
 
-/** Los 8 filtros reales, pero con el provider de tasas mockeado. */
-export function buildTestFilters(): Filter[] {
-  return [
-    new PassengerValidationFilter(),
-    new FlightValidationFilter(),
-    new ExchangeRateEnrichmentFilter(new StubExchangeRateProvider()),
-    basePriceCalculationFilter,
-    loyaltyDiscountFilter,
-    passengerTypeAdjustmentFilter,
-    taxAndFeesFilter,
-    new CurrencyConversionFilter(),
-  ];
+/** La cadena canónica de 8 filtros (src/filters/index.ts), con el provider mockeado. */
+export function buildTestFilters(provider: ExchangeRateProvider): Filter[] {
+  return createOrderedFilters(provider);
 }
 
 export interface TestAppHandles {
   app: ReturnType<typeof createApp>;
   configStore: PipelineConfigStore;
   reservationStore: ReservationStore;
+  exchangeRateProvider: ExchangeRateProvider;
 }
 
 /**
- * App lista para supertest, con stores nuevos en cada llamada: ningún test hereda la config
- * modificada ni las reservas guardadas por otro.
+ * App lista para supertest, con dependencias nuevas en cada llamada: ningún test hereda la
+ * config modificada, las reservas guardadas ni la cache de tasas de otro.
+ *
+ * El provider se comparte entre el pipeline y el controller de /pipeline, igual que en
+ * producción — es lo que hace verificable que `DELETE /pipeline/cache` vacíe la cache que el
+ * filtro 3a realmente usa.
  */
 export function buildTestApp(overrides: AppDependencies = {}): TestAppHandles {
   const configStore = overrides.configStore ?? new PipelineConfigStore();
   const reservationStore = overrides.reservationStore ?? new ReservationStore();
-  const pipeline = overrides.pipeline ?? new Pipeline(buildTestFilters());
+  const exchangeRateProvider = overrides.exchangeRateProvider ?? new StubExchangeRateProvider();
+  const pipeline = overrides.pipeline ?? new Pipeline(buildTestFilters(exchangeRateProvider));
 
   return {
-    app: createApp({ pipeline, configStore, reservationStore }),
+    app: createApp({ pipeline, configStore, reservationStore, exchangeRateProvider }),
     configStore,
     reservationStore,
+    exchangeRateProvider,
   };
 }
 
